@@ -1,86 +1,79 @@
-import streamlit as st
-from dotenv import load_dotenv, find_dotenv
 import os
-import google.generativeai as genai
-from PIL import Image
-
-load_dotenv(find_dotenv())
-st.set_page_config(page_title="Nutrition Monitor", page_icon="🔮")
-
-genai.configure(api_key=os.getenv("API_KEY"))
-
-def get_response(input, image):
-    model = genai.GenerativeModel("gemini-1.5-pro-latest")
-    response = model.generate_content([input, image[0]])
-    return response.text
-
-def input_image(upload):
-    if upload is not None:
-        bytes = upload.getvalue()
-        image_parts = [
-            {
-                "mime_type": upload.type,
-                "data": bytes,
-            }
-        ]
-        return image_parts
-    else:
-        return FileNotFoundError("No Image")
-    
-
-st.sidebar.title("Navigation")
-st.sidebar.header("Upload Section")
-
-uploaded_file = st.sidebar.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+import pytube
+import time
+import math 
+import ffmpeg 
+from faster_whisper import WhisperModel
+from deep_translator import GoogleTranslator
 
 
-st.header("Nutrition Monitor")
-if uploaded_file is not None:
-    image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Image", use_column_width=True)
 
-submit = st.button("Analyse this Food")
+def extract_audio(input_file):
+    extracted_audio = f"audio-{input_file}.wav"
+    stream = ffmpeg.input(input_file)
+    stream = ffmpeg.output(stream, extracted_audio)
+    ffmpeg.run(stream, overwrite_output=True, cmd=r'C:\ffmpeg-7.0.1-full_build\bin\ffmpeg.exe')
+    return extracted_audio
 
-input_prompt = """
-You are an expert nutritionist analyzing the food items in the image.
-Start by determining if the image contains food items. 
-If the image does not contain any food items, 
-clearly state "No food items detected in the image." 
-and do not provide any calorie information. 
-If food items are detected, 
-start by naming the meal based on the image, 
-identify and list every ingredient you can find in the image, 
-and then estimate the total calories for each ingredient. 
-Summarize the total calories based on the identified ingredients. 
-Follow the format below:
 
-If no food items are detected:
-No food items detected in the image.
 
-If food items are detected:
-Meal Name: [Name of the meal]
+def format(seconds):
+    hours = math.floor(seconds / 3600)
+    seconds %= 3600
+    minutes = math.floor(seconds / 60)
+    seconds %= 60
+    milliseconds = round((seconds - math.floor(seconds)) * 1000)
+    seconds = math.floor(seconds)
+    formatted_time = f"{hours :02d}:{minutes:02d}:{seconds:02d},{milliseconds:03d}"
+    printed = f"{hours :02d}:{minutes:02d}:{seconds:02d}:{milliseconds:02d}"
 
-1. Ingredient 1 - estimated calories
-2. Ingredient 2 - estimated calories
-----
-Total estimated calories: X
+    return formatted_time, printed
 
-Finally, mention whether the food is healthy or not, 
-and provide the percentage split of protein, carbs, and fats in the food item. 
-Also, mention the total fiber content in the food item and any other important details.
+def transcribe(audio, fast):
+    model = WhisperModel(fast)
+    segments, info = model.transcribe(audio)
+    language = info[0]
+    #print(f" Transcription Language: {language}")
+    segments = list(segments) # this is where the transcribe happens
 
-Note: Always identify ingredients and provide an estimated calorie count, 
-even if some details are uncertain.
-"""
+    for segment in segments: 
+        p1, formatted1 = format(segment.start)
+        p2, formatted2 = format(segment.end)
+        #print("[%s - %s] %s" % (formatted1, formatted2, segment.text))
+    return language, segments
 
-if submit:
-    with st.spinner("Analyzing..."):  
-       
-        image_data = input_image(uploaded_file)
-        
-        response = get_response(input_prompt, image_data)
-    
-    st.success("Done!")
-    
-    st.subheader("Food Analysis")
-    st.write(response)
+
+
+
+def generate_subs(input, language, segments):
+    file = f"sub-{input}.{language}.srt"
+    text = ""
+    for index, segment in enumerate(segments):
+        segment_start, x1 = format(segment.start)
+        segment_end, x2 = format(segment.end)
+
+        text += f"{str(index + 1)}\n"
+        text += f"{segment_start} --> {segment_end}\n"
+        if language != 'en':
+            translated = GoogleTranslator(source='auto', target='en').translate(text=segment.text)
+            text += f"{translated}\n\n"
+        else:
+            text += f"{segment.text}\n\n"
+    f = open(file, "w")
+    f.write(text)
+    f.close()
+    return file
+
+
+
+def embed_subs(title, file, language):
+    video_input_stream = ffmpeg.input(title)
+    subtitle_input_stream = ffmpeg.input(file)
+    output_video = f"output-{title}-{language}.mp4"
+    subtitle_track_tile = file.replace(".srt","")
+    stream = ffmpeg.output(video_input_stream, output_video,
+                           vf = f"subtitles={file}")
+    ffmpeg.run(stream, overwrite_output=True, cmd=r'C:\ffmpeg-7.0.1-full_build\bin\ffmpeg.exe')
+    return output_video
+
+
