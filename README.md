@@ -5,4 +5,4 @@ Embedding Translated Subtitles to Videos Automatically
 3. Program displays the new video file for user to download
 
 
-https://youtu.be/q8ONAupl8xs 
+(https://www.youtube.com/watch?v=q8ONAupl8xs)
