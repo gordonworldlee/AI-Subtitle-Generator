@@ -7,4 +7,4 @@ Embedding Translated Subtitles to Videos Automatically
 
 Youtube Walkthrough
 
-[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/q8ONAupl8xs/0.jpg)](https://www.youtube.com/watch?v=q8ONAupl8xs)
+[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/kAPYASAyQQI/0.jpg)](https://www.youtube.com/watch?v=kAPYASAyQQI)
